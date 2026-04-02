@@ -7,7 +7,7 @@ import {
   Award, Settings, Bell, Search, Bookmark, TrendingUp, Star,
   Loader2
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function CitizenDashboard() {
   const navigate = useNavigate();

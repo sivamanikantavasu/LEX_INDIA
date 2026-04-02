@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Users, Mail, Lock, Eye, EyeOff, ArrowLeft, User, Phone, MapPin, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function CitizenSignup() {
   const navigate = useNavigate();

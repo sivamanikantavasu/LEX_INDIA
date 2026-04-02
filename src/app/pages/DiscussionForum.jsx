@@ -5,7 +5,7 @@ import {
   ArrowLeft, MessageSquare, ThumbsUp, MessageCircle, User,
   Clock, TrendingUp, Plus, Search, Filter, X, Loader2
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function DiscussionForum() {
   const navigate = useNavigate();

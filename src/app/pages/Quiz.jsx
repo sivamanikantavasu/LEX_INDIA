@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, Award, CheckCircle, XCircle, Clock, BarChart, RefreshCw, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function Quiz() {
   const { id } = useParams();

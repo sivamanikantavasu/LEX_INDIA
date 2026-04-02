@@ -7,7 +7,7 @@ import {
   MessageCircle, Settings, Bell, CheckCircle, Eye, Edit2, Trash2, Search, Filter, Plus,
   Loader2
 } from 'lucide-react';
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function LegalArticles() {
   const navigate = useNavigate();

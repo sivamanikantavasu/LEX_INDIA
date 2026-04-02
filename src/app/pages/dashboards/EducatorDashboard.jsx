@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, Calendar, FileText, Users, 
   MessageSquare, Settings, Bell, Plus, Eye, Clock, CheckCircle, Loader2
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function EducatorDashboard() {
   const navigate = useNavigate();
@@ -263,5 +263,4 @@ export default function EducatorDashboard() {
       </div>
     </DashboardLayout>
   );
-}
 }

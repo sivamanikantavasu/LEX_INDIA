@@ -1,5 +1,5 @@
 import { BookOpen, Mail, Lock, Eye, EyeOff, ArrowLeft, User, Phone, Building, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function EducatorSignup() {
   const navigate = useNavigate();

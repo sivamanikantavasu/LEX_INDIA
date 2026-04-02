@@ -7,7 +7,7 @@ import {
   GraduationCap, Award, Loader2
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function ArticleView() {
   const { category, id } = useParams();

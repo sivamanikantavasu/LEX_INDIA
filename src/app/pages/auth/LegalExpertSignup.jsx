@@ -1,5 +1,5 @@
 import { Scale, Mail, Lock, Eye, EyeOff, ArrowLeft, User, Phone, Briefcase, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function LegalExpertSignup() {
   const navigate = useNavigate();
