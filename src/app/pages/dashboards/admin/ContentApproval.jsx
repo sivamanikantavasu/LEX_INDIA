@@ -39,21 +39,21 @@ export default function ContentApproval() {
   };
 
   const handlePreview = (content) => {
-    alert(`Preview: ${content.title}\n\nAuthor: ${content.author}\nType: ${content.type}\nCategory: ${content.category}\nWord Count: ${content.wordCount}`);
+    alert(`Preview: ${content.title}\n\nAuthor: ${content.author}\nType: ${content.type}\nSubmitted: ${content.submittedDate}`);
   };
 
-  const handleApprove = (content) => {
-    if (window.confirm(`Approve "${content.title}" by ${content.author}?`)) {
-      approveContent(content.id);
-      alert(`Content approved successfully!`);
+  const handleApprove = async (id) => {
+    if (window.confirm('Are you sure you want to approve this content? It will be published immediately.')) {
+      await approveContent(id);
+      alert('Content approved successfully!');
     }
   };
 
-  const handleReject = (content) => {
-    const reason = prompt(`Reject "${content.title}"?\n\nPlease provide a reason for rejection:`);
-    if (reason) {
-      rejectContent(content.id);
-      alert(`Content rejected. Notification sent to ${content.author}.`);
+  const handleReject = async (id) => {
+    const reason = window.prompt('Please provide a reason for rejection:');
+    if (reason !== null) {
+      await rejectContent(id);
+      alert('Content rejected and moved to drafts.');
     }
   };
 

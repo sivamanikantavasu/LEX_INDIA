@@ -1,33 +1,14 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import DashboardLayout from '../../../components/DashboardLayout';
-import { 
-  LayoutDashboard, Scale, BookOpen, FileText, Edit, 
-  MessageCircle, Settings, Bell, Clock, CheckCircle2, AlertCircle, User, X, Send
-} from 'lucide-react';
+import { useLegalExpert } from '../../../contexts/LegalExpertContext';
 
 export default function Advisory() {
-  const [requests, setRequests] = useState([]);
+  const { advisoryRequests: requests, respondToAdvisory, loading } = useLegalExpert();
   const [filter, setFilter] = useState('all'); // 'all', 'pending', 'responded'
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [responseText, setResponseText] = useState('');
-  const [pendingCount, setPendingCount] = useState(0);
 
-  // Fetch advisory requests from database when connected
-  useEffect(() => {
-    // TODO: Fetch from Supabase
-    // const fetchRequests = async () => {
-    //   const { data, error } = await supabase
-    //     .from('advisory_requests')
-    //     .select('*')
-    //     .order('created_at', { ascending: false });
-    //   if (data) {
-    //     setRequests(data);
-    //     setPendingCount(data.filter(r => r.status === 'pending').length);
-    //   }
-    // };
-    // fetchRequests();
-  }, []);
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const respondedCount = requests.filter(r => r.status === 'replied').length;
+  const totalCount = requests.length;
 
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/legal-expert' },
@@ -42,14 +23,14 @@ export default function Advisory() {
 
   const filteredRequests = requests.filter(request => {
     if (filter === 'pending') return request.status === 'pending';
-    if (filter === 'responded') return request.status === 'responded';
+    if (filter === 'responded') return request.status === 'replied';
     return true;
   });
 
-  const sortedRequests = filteredRequests.sort((a, b) => {
+  const sortedRequests = [...filteredRequests].sort((a, b) => {
     if (a.status === 'pending' && b.status !== 'pending') return -1;
     if (a.status !== 'pending' && b.status === 'pending') return 1;
-    return new Date(b.date) - new Date(a.date);
+    return new Date(b.created_at) - new Date(a.created_at);
   });
 
   const handleRespond = (request) => {
@@ -57,20 +38,16 @@ export default function Advisory() {
     setResponseText('');
   };
 
-  const handleSubmitResponse = () => {
-    // TODO: Save response to Supabase
-    // const { data, error } = await supabase
-    //   .from('advisory_requests')
-    //   .update({ status: 'responded', response: responseText, responded_at: new Date() })
-    //   .eq('id', selectedRequest.id);
-    
-    alert('Response will be saved when database is connected');
-    setSelectedRequest(null);
-    setResponseText('');
+  const handleSubmitResponse = async () => {
+    try {
+      await respondToAdvisory(selectedRequest.id, responseText);
+      alert('Response submitted successfully!');
+      setSelectedRequest(null);
+      setResponseText('');
+    } catch (error) {
+      alert('Error submitting response: ' + error.message);
+    }
   };
-
-  const totalCount = requests.length;
-  const respondedCount = requests.filter(r => r.status === 'responded').length;
 
   return (
     <DashboardLayout navigationItems={navigationItems} title="Advisory Requests" role="Legal Expert">

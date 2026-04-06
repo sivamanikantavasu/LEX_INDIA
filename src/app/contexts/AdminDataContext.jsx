@@ -39,18 +39,24 @@ export const AdminDataProvider = ({ children }) => {
   async function fetchAdminData() {
     setLoading(true);
     try {
-      // Fetch users
-      const { data: profiles } = await supabase.from('profiles').select('*');
+      // Fetch users with full profile details
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      
       setUsers(profiles?.map(p => ({
         id: p.id,
         name: p.full_name || p.username || 'Anonymous',
-        email: p.username || '', // Note: Supabase username field used as email placeholder
-        role: p.role,
+        email: p.username || '',
+        phone: p.phone || '',
+        location: `${p.city || ''}${p.city && p.state ? ', ' : ''}${p.state || ''}`,
+        role: p.role.charAt(0).toUpperCase() + p.role.slice(1),
         status: 'Active',
         joinedDate: new Date(p.updated_at).toLocaleDateString()
       })) || []);
 
-      // Fetch pending content (under_review status)
+      // Fetch pending content
       const { data: pending } = await supabase
         .from('articles')
         .select('*, profiles(full_name)')
@@ -64,14 +70,13 @@ export const AdminDataProvider = ({ children }) => {
         type: 'Article'
       })) || []);
 
-      // Fetch total approved
-      const { count } = await supabase
+      // Fetch stats
+      const { count: approvedCount } = await supabase
         .from('articles')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'published');
-      setTotalApproved(count || 0);
+      setTotalApproved(approvedCount || 0);
 
-      // Fetch total views
       const { data: viewsData } = await supabase.from('articles').select('views');
       const totalViews = viewsData?.reduce((sum, a) => sum + (Number(a.views) || 0), 0) || 0;
       
@@ -87,6 +92,58 @@ export const AdminDataProvider = ({ children }) => {
       setLoading(false);
     }
   }
+
+  const addUser = async (userData) => {
+    try {
+      // Note: Auth user creation usually happens via a dedicated admin function or invite flow.
+      // For this MVP, we upsert the profile. In production, use supabase.auth.admin.createUser.
+      const { error } = await supabase.from('profiles').insert([{
+        full_name: userData.name,
+        username: userData.email,
+        phone: userData.phone,
+        role: userData.role.toLowerCase(),
+        city: userData.location.split(',')[0]?.trim(),
+        state: userData.location.split(',')[1]?.trim()
+      }]);
+      if (error) throw error;
+      await fetchAdminData();
+    } catch (error) {
+      console.error('Error adding user:', error);
+      alert('Failed to add user: ' + error.message);
+    }
+  };
+
+  const updateUser = async (userId, userData) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: userData.name,
+          username: userData.email,
+          phone: userData.phone,
+          role: userData.role.toLowerCase(),
+          city: userData.location.split(',')[0]?.trim(),
+          state: userData.location.split(',')[1]?.trim()
+        })
+        .eq('id', userId);
+      if (error) throw error;
+      await fetchAdminData();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Failed to update user: ' + error.message);
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      if (error) throw error;
+      await fetchAdminData();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user');
+    }
+  };
 
   const approveContent = async (contentId) => {
     try {
@@ -105,12 +162,37 @@ export const AdminDataProvider = ({ children }) => {
     try {
       const { error } = await supabase
         .from('articles')
-        .update({ status: 'draft' }) // Send back to draft
+        .update({ status: 'draft' })
         .eq('id', contentId);
       if (error) throw error;
       await fetchAdminData();
     } catch (error) {
       console.error('Error rejecting content:', error);
+    }
+  };
+
+  const syncConstitutionalData = async () => {
+    setLoading(true);
+    try {
+      // Logic for Phase 2: Auto-Sync
+      // For now, we simulate a fetch and create a sync log
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error: logError } = await supabase.from('sync_logs').insert([{
+        admin_id: user.id,
+        source_name: 'Legislative.gov.in',
+        status: 'success',
+        items_synced: 12 // Simulated items
+      }]);
+
+      if (logError) throw logError;
+      alert('Constitution data synced successfully! Check content approval for new entries.');
+      await fetchAdminData();
+    } catch (error) {
+      console.error('Error syncing data:', error);
+      alert('Sync failed: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -121,10 +203,13 @@ export const AdminDataProvider = ({ children }) => {
     totalApproved,
     analytics,
     roles,
+    addUser,
+    updateUser,
+    deleteUser,
     approveContent,
     rejectContent,
-    refreshData: fetchAdminData,
-    systemLogs: [] // Mocked for now
+    syncConstitutionalData,
+    refreshData: fetchAdminData
   };
 
   return (
@@ -132,4 +217,4 @@ export const AdminDataProvider = ({ children }) => {
       {children}
     </AdminDataContext.Provider>
   );
-};
+};

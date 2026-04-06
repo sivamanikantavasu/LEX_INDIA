@@ -1,20 +1,14 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { useNavigate } from 'react-router';
-import DashboardLayout from '../../../components/DashboardLayout';
-import { 
-  LayoutDashboard, Scale, BookOpen, FileText, Edit, 
-  MessageCircle, Settings, Bell, Plus, Calendar, CheckCircle, Clock, X, ArrowLeft
-} from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function Amendments() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [amendments, setAmendments] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [sortBy, setSortBy] = useState('all'); // 'all', 'recent', 'active', 'documented'
+  const [sortBy, setSortBy] = useState('all'); 
   
-  // Form state for adding amendment
   const [newAmendment, setNewAmendment] = useState({
     number: '',
     title: '',
@@ -24,62 +18,73 @@ export default function Amendments() {
     articles: '',
   });
 
-  // Fetch amendments from database when connected
-  useEffect(() => {
-    // TODO: Fetch amendments from Supabase
-    // const fetchAmendments = async () => {
-    //   const { data, error } = await supabase
-    //     .from('amendments')
-    //     .select('*')
-    //     .order('number', { ascending: false });
-    //   if (data) setAmendments(data);
-    // };
-    // fetchAmendments();
-  }, []);
-
-  // Fetch pending advisory count
-  useEffect(() => {
-    // TODO: Fetch from Supabase
-    // const fetchPendingCount = async () => {
-    //   const { count } = await supabase
-    //     .from('advisory_requests')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('status', 'pending');
-    //   setPendingCount(count || 0);
-    // };
-    // fetchPendingCount();
-  }, []);
-
-  const navigationItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/legal-expert' },
-    { label: 'Update Articles', icon: Scale, path: '/legal-expert/articles' },
-    { label: 'Legal Insights', icon: BookOpen, path: '/legal-expert/insights' },
-    { label: 'Case References', icon: FileText, path: '/legal-expert/cases' },
-    { label: 'Amendment Updates', icon: Edit, path: '/legal-expert/amendments', active: true },
-    { label: 'Advisory Requests', icon: MessageCircle, path: '/legal-expert/advisory', badge: pendingCount > 0 ? String(pendingCount) : undefined },
-    { label: 'Notifications', icon: Bell, path: '/legal-expert/notifications' },
-    { label: 'Settings', icon: Settings, path: '/legal-expert/settings' },
-  ];
-
-  const handleAddAmendment = () => {
-    // TODO: Save to Supabase
-    // const articlesArray = newAmendment.articles.split(',').map(a => a.trim());
-    // const amendmentData = {
-    //   ...newAmendment,
-    //   articles: articlesArray,
-    // };
-    // await supabase.from('amendments').insert([amendmentData]);
+  const fetchAmendments = async () => {
+    const { data, error } = await supabase
+      .from('articles')
+      .select('*')
+      .contains('metadata', { is_amendment: true })
+      .order('created_at', { ascending: false });
     
-    alert('Amendment information will be added when database is connected');
-    setIsAddModalOpen(false);
-    setNewAmendment({
-      number: '',
-      title: '',
-      description: '',
-      year: '',
-      status: 'Active',
-      articles: '',
-    });
+    if (data) {
+      setAmendments(data.map(a => ({
+        id: a.id,
+        number: a.metadata.number,
+        title: a.title,
+        description: a.content,
+        year: a.metadata.year,
+        status: a.metadata.status || 'Active',
+        articles: a.metadata.affected_articles || [],
+      })));
+    }
+  };
+
+  useEffect(() => {
+    fetchAmendments();
+  }, []);
+
+  useEffect(() => {
+    async function fetchPendingCount() {
+      if (!user) return;
+      const { count } = await supabase
+        .from('advisory_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('expert_id', user.id)
+        .eq('status', 'pending');
+      setPendingCount(count || 0);
+    }
+    fetchPendingCount();
+  }, [user]);
+
+  const handleAddAmendment = async () => {
+    try {
+      const { error } = await supabase
+        .from('articles')
+        .insert([{
+          title: newAmendment.title,
+          content: newAmendment.description,
+          author_id: user.id,
+          is_official: true,
+          status: 'published',
+          metadata: {
+            is_amendment: true,
+            number: newAmendment.number,
+            year: newAmendment.year,
+            status: newAmendment.status,
+            affected_articles: newAmendment.articles.split(',').map(a => a.trim())
+          }
+        }]);
+
+      if (error) throw error;
+      
+      alert('Amendment information added successfully!');
+      setIsAddModalOpen(false);
+      setNewAmendment({
+        number: '', title: '', description: '', year: '', status: 'Active', articles: '',
+      });
+      fetchAmendments();
+    } catch (error) {
+      alert('Error adding amendment: ' + error.message);
+    }
   };
 
   // Filter amendments based on sort selection

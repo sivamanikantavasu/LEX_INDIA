@@ -1,14 +1,7 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
-import DashboardLayout from '../../../components/DashboardLayout';
-import {
-  LayoutDashboard, BookOpen, Calendar, FileText, Users,
-  Settings, CheckCircle, Plus, Trash2, Edit2, X, ChevronRight, ArrowLeft
-} from 'lucide-react';
-import { quizSets } from '../../../utils/quizData';
+import { useEducator } from '../../../contexts/EducatorContext';
 
 export default function QuizCreator() {
-  const [sets, setSets] = useState(quizSets);
+  const { quizzes: sets, loading, createQuiz, refreshData } = useEducator();
   const [selectedSet, setSelectedSet] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -73,7 +66,7 @@ export default function QuizCreator() {
     });
   };
 
-  const handleSaveNewSet = () => {
+  const handleSaveNewSet = async () => {
     // Validate all questions are filled
     const hasEmptyQuestions = newSet.questions.some(q =>
       !q.question || q.options.some(opt => !opt) || !q.explanation
@@ -84,16 +77,22 @@ export default function QuizCreator() {
       return;
     }
 
-    const newSetData = {
-      id: sets.length + 1,
-      title: newSet.title,
-      description: newSet.description,
-      questions: newSet.questions
-    };
-
-    setSets(prev => [...prev, newSetData]);
-    setShowCreateForm(false);
-    alert('New quiz set created successfully!');
+    try {
+      await createQuiz({
+        title: newSet.title,
+        description: newSet.description,
+        questions: newSet.questions.map(q => ({
+          text: q.question,
+          options: q.options,
+          correctIndex: q.correctAnswer,
+          explanation: q.explanation
+        }))
+      });
+      setShowCreateForm(false);
+      alert('New quiz set created successfully!');
+    } catch (error) {
+      alert('Error creating quiz: ' + error.message);
+    }
   };
 
   const handleEditQuestion = (setId, question) => {
@@ -101,61 +100,15 @@ export default function QuizCreator() {
   };
 
   const handleUpdateQuestion = () => {
-    setSets(prev => prev.map(set => {
-      if (set.id === editingQuestion.setId) {
-        return {
-          ...set,
-          questions: set.questions.map(q =>
-            q.id === editingQuestion.id ? { ...editingQuestion } : q
-          )
-        };
-      }
-      return set;
-    }));
-    setEditingQuestion(null);
-    // Update the selected set if it's currently being viewed
-    if (selectedSet && selectedSet.id === editingQuestion.setId) {
-      setSelectedSet(prev => ({
-        ...prev,
-        questions: prev.questions.map(q =>
-          q.id === editingQuestion.id ? { ...editingQuestion } : q
-        )
-      }));
-    }
-    alert('Question updated successfully!');
+    alert('Real-time question updating will be available in the next version');
   };
 
-  const handleDeleteQuestion = (setId, questionId) => {
-    if (!window.confirm('Are you sure you want to delete this question?')) return;
-
-    setSets(prev => prev.map(set => {
-      if (set.id === setId) {
-        return {
-          ...set,
-          questions: set.questions.filter(q => q.id !== questionId)
-        };
-      }
-      return set;
-    }));
-
-    // Update the selected set if it's currently being viewed
-    if (selectedSet && selectedSet.id === setId) {
-      setSelectedSet(prev => ({
-        ...prev,
-        questions: prev.questions.filter(q => q.id !== questionId)
-      }));
-    }
-    alert('Question deleted successfully!');
+  const handleDeleteQuestion = () => {
+    alert('Question deletion will be available in the next version');
   };
 
   const handleDeleteSet = (setId) => {
-    if (!window.confirm('Are you sure you want to delete this entire set?')) return;
-
-    setSets(prev => prev.filter(set => set.id !== setId));
-    if (selectedSet && selectedSet.id === setId) {
-      setSelectedSet(null);
-    }
-    alert('Quiz set deleted successfully!');
+    alert(`Deletion for set ${setId} - would trigger Supabase delete`);
   };
 
   return (

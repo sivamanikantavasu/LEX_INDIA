@@ -39,6 +39,9 @@ CREATE TABLE profiles (
   role user_role DEFAULT 'citizen',
   bio TEXT,
   points INTEGER DEFAULT 0,
+  phone TEXT,
+  city TEXT,
+  state TEXT,
   
   CONSTRAINT username_length CHECK (char_length(username) >= 3)
 );
@@ -59,12 +62,16 @@ CREATE TABLE articles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
+  description TEXT,
   excerpt TEXT,
   category_id BIGINT REFERENCES categories(id),
   author_id UUID REFERENCES profiles(id),
   status content_status DEFAULT 'draft',
   views BIGINT DEFAULT 0,
   likes_count BIGINT DEFAULT 0,
+  source_url TEXT,
+  is_official BOOLEAN DEFAULT FALSE,
+  metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -139,12 +146,48 @@ CREATE TABLE advisory_requests (
   expert_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   subject TEXT NOT NULL,
   query TEXT NOT NULL,
-  query_content TEXT NOT NULL,
   response TEXT,
   status TEXT DEFAULT 'pending', -- 'pending', 'replied'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   replied_at TIMESTAMP WITH TIME ZONE
 );
+
+-- 12. Sessions (Educator classes)
+CREATE TABLE sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  educator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  duration_minutes INTEGER DEFAULT 60,
+  meeting_link TEXT, -- Zoom/Google Meet
+  max_participants INTEGER DEFAULT 100,
+  status TEXT DEFAULT 'scheduled', -- 'scheduled', 'ongoing', 'completed', 'cancelled'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 13. Sync Logs (Admin only)
+CREATE TABLE sync_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  admin_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  source_name TEXT NOT NULL, -- e.g., 'Legislative.gov.in'
+  status TEXT NOT NULL, -- 'success', 'failed'
+  items_synced INTEGER DEFAULT 0,
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 14. Broadcasts (Educator to students)
+CREATE TABLE broadcasts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  educator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view broadcasts." ON broadcasts FOR SELECT USING (true);
+CREATE POLICY "Educators can insert broadcasts." ON broadcasts FOR INSERT WITH CHECK (auth.uid() = educator_id);
 
 -- RLS POLICIES --
 
@@ -172,10 +215,11 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE TABLE IF NOT EXISTS likes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  article_id UUID REFERENCES articles(id) ON DELETE CASCADE,
+  content_id UUID NOT NULL,
+  content_type TEXT NOT NULL, -- 'article', 'forum_thread', etc.
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  UNIQUE(article_id, user_id)
+  UNIQUE(content_id, content_type, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -275,8 +319,17 @@ CREATE POLICY "Users can view their earned achievements." ON user_achievements F
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, username, full_name, avatar_url, role)
-  VALUES (new.id, new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url', (new.raw_user_meta_data->>'role')::user_role);
+  INSERT INTO public.profiles (id, username, full_name, avatar_url, role, phone, city, state)
+  VALUES (
+    new.id, 
+    new.raw_user_meta_data->>'username', 
+    new.raw_user_meta_data->>'full_name', 
+    new.raw_user_meta_data->>'avatar_url', 
+    COALESCE((new.raw_user_meta_data->>'role')::user_role, 'citizen'),
+    new.raw_user_meta_data->>'phone',
+    new.raw_user_meta_data->>'city',
+    new.raw_user_meta_data->>'state'
+  );
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

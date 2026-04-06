@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { 
   LayoutDashboard, Scale, BookOpen, FileText, Edit, 
@@ -8,6 +10,7 @@ import {
 } from 'lucide-react';
 
 export default function AddCaseReference() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     title: '',
@@ -61,11 +64,42 @@ export default function AddCaseReference() {
     });
   };
 
-  const handleSubmit = (e, status) => {
+  const handleSubmit = async (e, status) => {
     e.preventDefault();
-    // Here you would save to backend
-    alert(`Case reference ${status === 'published' ? 'added' : 'saved as draft'} successfully!`);
-    navigate('/legal-expert/cases');
+    if (!user) {
+      alert('Please login to contribute');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('articles')
+        .insert([{
+          title: formData.title,
+          content: formData.summary,
+          excerpt: formData.significance,
+          author_id: user.id,
+          is_official: true,
+          status: status === 'published' ? 'published' : 'draft',
+          source_url: formData.pdfUrl || null,
+          metadata: {
+            is_case_reference: true,
+            citation: formData.citation,
+            court: formData.court,
+            case_type: formData.type,
+            year: formData.year,
+            judges: formData.judgeName,
+            affected_articles: formData.relevantArticles
+          }
+        }]);
+
+      if (error) throw error;
+
+      alert(`Case reference ${status === 'published' ? 'added' : 'saved as draft'} successfully!`);
+      navigate('/legal-expert/cases');
+    } catch (error) {
+      alert('Error saving case reference: ' + error.message);
+    }
   };
 
   return (

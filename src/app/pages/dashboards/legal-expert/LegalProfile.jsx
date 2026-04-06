@@ -1,12 +1,8 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import DashboardLayout from '../../../components/DashboardLayout';
-import { 
-  LayoutDashboard, Scale, BookOpen, FileText, Edit, 
-  MessageCircle, Settings, Bell, User, Mail, Phone, MapPin, Award, Briefcase, Save
-} from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function LegalProfile() {
+  const { user, updateProfile: authUpdateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
     name: '',
@@ -27,98 +23,74 @@ export default function LegalProfile() {
   ]);
   const [pendingCount, setPendingCount] = useState(0);
 
-  // Fetch profile data from database when connected
   useEffect(() => {
-    // TODO: Fetch from Supabase
-    // const fetchProfile = async () => {
-    //   const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
-    //   const { data, error } = await supabase
-    //     .from('users')
-    //     .select('*')
-    //     .eq('email', userEmail)
-    //     .eq('role', 'legal-expert')
-    //     .single();
-    //   if (data) setProfile(data);
-    // };
-    // fetchProfile();
-    
-    // Fetch user email from storage for display
-    const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
-    if (userEmail) {
-      setProfile(prev => ({ ...prev, email: userEmail }));
+    async function fetchProfile() {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (data) {
+        setProfile({
+          name: data.full_name || '',
+          email: user.email || '',
+          phone: data.phone || '',
+          location: data.city ? `${data.city}, ${data.state}` : '',
+          bio: data.bio || '',
+          // Use metadata for specialized fields
+          barCouncilId: data.metadata?.bar_id || '',
+          specialization: data.metadata?.specialization || '',
+          experience: data.metadata?.experience || '',
+          education: data.metadata?.education || '',
+        });
+      }
     }
-  }, []);
+    fetchProfile();
+  }, [user]);
 
-  // Fetch stats from database when connected
   useEffect(() => {
-    // TODO: Fetch stats from Supabase
-    // const fetchStats = async () => {
-    //   const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
-    //   
-    //   const { count: articlesCount } = await supabase
-    //     .from('article_updates')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('updated_by', userEmail);
-    //   
-    //   const { count: insightsCount } = await supabase
-    //     .from('legal_insights')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('author_email', userEmail);
-    //   
-    //   const { count: casesCount } = await supabase
-    //     .from('case_references')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('added_by', userEmail);
-    //   
-    //   const { count: advisoryCount } = await supabase
-    //     .from('advisory_requests')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('responded_by', userEmail)
-    //     .eq('status', 'responded');
-    //   
-    //   setStats([
-    //     { label: 'Articles Updated', value: String(articlesCount || 0), icon: FileText },
-    //     { label: 'Insights Published', value: String(insightsCount || 0), icon: BookOpen },
-    //     { label: 'Cases Referenced', value: String(casesCount || 0), icon: Scale },
-    //     { label: 'Advisory Responses', value: String(advisoryCount || 0), icon: MessageCircle },
-    //   ]);
-    // };
-    // fetchStats();
-  }, []);
+    async function fetchStats() {
+      if (!user) return;
+      
+      const [{ count: articlesCount }, { count: insightsCount }, { count: advisoryCount }] = await Promise.all([
+        supabase.from('articles').select('*', { count: 'exact', head: true }).eq('author_id', user.id).eq('is_official', false),
+        supabase.from('articles').select('*', { count: 'exact', head: true }).eq('author_id', user.id).eq('status', 'published'),
+        supabase.from('advisory_requests').select('*', { count: 'exact', head: true }).eq('expert_id', user.id)
+      ]);
+      
+      setStats([
+        { label: 'Articles Updated', value: String(articlesCount || 0), icon: FileText },
+        { label: 'Insights Published', value: String(insightsCount || 0), icon: BookOpen },
+        { label: 'Cases Referenced', value: '0', icon: Scale },
+        { label: 'Advisory Responses', value: String(advisoryCount || 0), icon: MessageCircle },
+      ]);
+    }
+    fetchStats();
+  }, [user]);
 
-  // Fetch pending advisory count
-  useEffect(() => {
-    // TODO: Fetch from Supabase
-    // const fetchPendingCount = async () => {
-    //   const { count } = await supabase
-    //     .from('advisory_requests')
-    //     .select('*', { count: 'exact', head: true })
-    //     .eq('status', 'pending');
-    //   setPendingCount(count || 0);
-    // };
-    // fetchPendingCount();
-  }, []);
-
-  const navigationItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/legal-expert' },
-    { label: 'Update Articles', icon: Scale, path: '/legal-expert/articles' },
-    { label: 'Legal Insights', icon: BookOpen, path: '/legal-expert/insights' },
-    { label: 'Case References', icon: FileText, path: '/legal-expert/cases' },
-    { label: 'Amendment Updates', icon: Edit, path: '/legal-expert/amendments' },
-    { label: 'Advisory Requests', icon: MessageCircle, path: '/legal-expert/advisory', badge: pendingCount > 0 ? String(pendingCount) : undefined },
-    { label: 'Notifications', icon: Bell, path: '/legal-expert/notifications' },
-    { label: 'Settings', icon: Settings, path: '/legal-expert/settings' },
-  ];
-
-  const handleSave = () => {
-    // TODO: Save to Supabase
-    // const { data, error } = await supabase
-    //   .from('users')
-    //   .update(profile)
-    //   .eq('email', profile.email);
-    
-    setIsEditing(false);
-    alert('Profile will be updated when database is connected');
+  const handleSave = async () => {
+    const [city, state] = profile.location.split(',').map(s => s.trim());
+    try {
+      await authUpdateProfile({
+        full_name: profile.name,
+        phone: profile.phone,
+        city: city || '',
+        state: state || '',
+        bio: profile.bio,
+        metadata: {
+          bar_id: profile.barCouncilId,
+          specialization: profile.specialization,
+          experience: profile.experience,
+          education: profile.education
+        }
+      });
+      setIsEditing(false);
+      alert('Profile updated successfully!');
+    } catch (error) {
+      alert('Error updating profile: ' + error.message);
+    }
   };
 
   return (

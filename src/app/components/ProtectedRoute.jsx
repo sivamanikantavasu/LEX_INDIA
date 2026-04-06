@@ -1,25 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ProtectedRoute({ children, requiredRole }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isAuthorized, setIsAuthorized] = useState(null); // null = checking, true = authorized, false = not authorized
+  const { user, role, loading } = useAuth();
 
   useEffect(() => {
-    // Check if user is authenticated (check localStorage for persistent sessions)
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-    const userRole = localStorage.getItem('userRole');
+    if (loading) return;
 
     console.log('ProtectedRoute check:', {
-      isAuthenticated,
-      userRole,
+      user: !!user,
+      role,
       requiredRole,
       currentPath: location.pathname
     });
 
     // If not authenticated or wrong role, redirect to appropriate login
-    if (!isAuthenticated || (requiredRole && userRole !== requiredRole)) {
+    if (!user || (requiredRole && role !== requiredRole)) {
       // Map roles to their login pages
       const loginRoutes = {
         admin: '/auth/admin/login',
@@ -31,14 +30,11 @@ export default function ProtectedRoute({ children, requiredRole }) {
       const loginRoute = loginRoutes[requiredRole] || '/';
       console.log('Redirecting to:', loginRoute);
       navigate(loginRoute, { replace: true });
-      setIsAuthorized(false);
-    } else {
-      setIsAuthorized(true);
     }
-  }, [navigate, requiredRole, location.pathname]);
+  }, [navigate, requiredRole, location.pathname, user, role, loading]);
 
   // Show loading state while checking authorization
-  if (isAuthorized === null) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center ashoka-bg">
         <div className="text-center">

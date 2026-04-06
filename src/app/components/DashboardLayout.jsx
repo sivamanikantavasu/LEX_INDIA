@@ -1,29 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { 
   Shield, Bell, Menu, X, LogOut, User, 
-  ChevronDown
+  ChevronDown, CheckCircle, Info, AlertTriangle
 } from 'lucide-react';
 import SearchBar from './SearchBar';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function DashboardLayout({ children, navigationItems, title, role }) {
+  const { user, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   
-  const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail') || 'user@lexindia.gov.in';
-  const userName = role === 'Administrator' ? 'Administrator' : 'User';
+  const userEmail = user?.email || 'user@lexindia.gov.in';
+  const userName = role === 'Administrator' ? 'Administrator' : (user?.user_metadata?.full_name || 'User');
 
-  const handleLogout = () => {
-    // Clear authentication state from both localStorage and sessionStorage
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userEmail');
-    sessionStorage.removeItem('isAuthenticated');
-    sessionStorage.removeItem('userRole');
-    sessionStorage.removeItem('userEmail');
+  useEffect(() => {
+    async function fetchNotifications() {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (data) setNotifications(data);
+    }
+    fetchNotifications();
+
+    // Real-time subscription for new notifications
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `user_id=eq.${user?.id}`
+      }, (payload) => {
+        setNotifications(prev => [payload.new, ...prev].slice(0, 5));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const handleLogout = async () => {
+    await signOut();
     navigate('/');
   };
   
@@ -41,17 +71,13 @@ export default function DashboardLayout({ children, navigationItems, title, role
     }
   };
 
-  // Map role display names to role keys for SearchBar
-  const roleKeyMap = {
-    'Administrator': 'admin',
-    'Educator': 'educator',
-    'Legal Expert': 'legal-expert',
-    'Citizen': 'citizen',
+  const markAsRead = async (id) => {
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
-  const roleKey = roleKeyMap[role] || 'citizen';
-
-  // Notifications - empty by default
-  const notifications = [];
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] ashoka-pattern">
@@ -156,10 +182,70 @@ export default function DashboardLayout({ children, navigationItems, title, role
                 {/* Search */}
                 <SearchBar role={roleKey} />
 
+                {/* Notifications */}
+                <div className="relative">
+                  <button
+                    onClick={() => setNotificationsOpen(!notificationsOpen)}
+                    className="p-2 hover:bg-[#F8F9FA] rounded-lg transition-colors relative"
+                  >
+                    <Bell className="w-6 h-6 text-[#0A1F44]" />
+                    {notifications.some(n => !n.is_read) && (
+                      <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {notificationsOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute right-0 mt-2 w-80 glass-white rounded-xl shadow-2xl border border-[#0A1F44]/10 overflow-hidden"
+                      >
+                        <div className="p-4 border-b border-[#0A1F44]/10 flex items-center justify-between">
+                          <h3 className="text-sm font-bold text-[#0A1F44]">Notifications</h3>
+                          {notifications.length > 0 && (
+                            <button className="text-[10px] text-[#FF9933] hover:underline">Mark all as read</button>
+                          )}
+                        </div>
+                        <div className="max-h-96 overflow-y-auto">
+                          {notifications.length > 0 ? (
+                            notifications.map((n) => (
+                              <div 
+                                key={n.id} 
+                                className={`p-4 border-b border-[#0A1F44]/5 flex gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${!n.is_read ? 'bg-orange-50/30' : ''}`}
+                                onClick={() => markAsRead(n.id)}
+                              >
+                                {n.type === 'success' && <CheckCircle className="w-5 h-5 text-[#138808] flex-shrink-0" />}
+                                {n.type === 'info' && <Info className="w-5 h-5 text-blue-500 flex-shrink-0" />}
+                                {n.type === 'warning' && <AlertTriangle className="w-5 h-5 text-[#FF9933] flex-shrink-0" />}
+                                <div>
+                                  <p className="text-sm text-[#0A1F44] font-medium leading-tight mb-1">{n.title}</p>
+                                  <p className="text-xs text-[#64748B] line-clamp-2">{n.content}</p>
+                                  <p className="text-[10px] text-[#94A3B8] mt-1">{new Date(n.created_at).toLocaleTimeString()}</p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-8 text-center">
+                              <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                              <p className="text-sm text-gray-400">No new notifications</p>
+                            </div>
+                          )}
+                        </div>
+                   
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {/* Profile Menu */}
                 <div className="relative">
                   <button
-                    onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                    onClick={() => {
+                      setProfileMenuOpen(!profileMenuOpen);
+                      setNotificationsOpen(false);
+                    }}
                     className="flex items-center gap-3 p-2 hover:bg-[#F8F9FA] rounded-lg transition-colors"
                   >
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF9933] to-[#0A1F44] flex items-center justify-center">

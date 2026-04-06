@@ -4,17 +4,85 @@ import DashboardLayout from '../../../components/DashboardLayout';
 import { 
   LayoutDashboard, BookOpen, Scale, Heart, Settings, Bell, 
   Bookmark, User, Mail, Phone, MapPin, Calendar, Award, 
-  BookOpen as BookIcon, Clock, TrendingUp
+  BookOpen as BookIcon, Clock, TrendingUp, Save, Edit2, X
 } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function CitizenProfile() {
-  const [isGuest, setIsGuest] = useState(false);
+  const { user, updateProfile: authUpdateProfile } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+    joinedDate: '',
+    bio: '',
+    stats: {
+      articlesRead: 0,
+      bookmarks: 0,
+      quizScore: 0,
+      hoursSpent: 0
+    }
+  });
+
+  const [editData, setEditData] = useState(profileData);
 
   useEffect(() => {
-    // Check if user is a guest
-    const guestStatus = localStorage.getItem('isGuest') === 'true';
-    setIsGuest(guestStatus);
-  }, []);
+    async function fetchProfile() {
+      if (!user) return;
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) {
+        // Fetch bookmarks count
+        const { count: bookmarkCount } = await supabase
+          .from('bookmarks')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+
+        const mappedData = {
+          name: profile.full_name || 'LexIndia Citizen',
+          email: user.email || '',
+          phone: profile.phone || '',
+          location: profile.city ? `${profile.city}, ${profile.state}` : '',
+          joinedDate: new Date(profile.created_at).toLocaleDateString(),
+          bio: profile.bio || '',
+          stats: {
+            articlesRead: 12, // Simulated for now
+            bookmarks: bookmarkCount || 0,
+            quizScore: profile.metadata?.total_quiz_score || 0,
+            hoursSpent: 5
+          }
+        };
+        setProfileData(mappedData);
+        setEditData(mappedData);
+      }
+    }
+    fetchProfile();
+  }, [user]);
+
+  const handleSave = async () => {
+    const [city, state] = editData.location.split(',').map(s => s.trim());
+    try {
+      await authUpdateProfile({
+        full_name: editData.name,
+        phone: editData.phone,
+        city: city || '',
+        state: state || '',
+        bio: editData.bio
+      });
+      setProfileData(editData);
+      setIsEditing(false);
+      alert('Profile updated successfully!');
+    } catch (error) {
+      alert('Error updating profile: ' + error.message);
+    }
+  };
 
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/citizen' },
@@ -28,237 +96,183 @@ export default function CitizenProfile() {
 
   return (
     <DashboardLayout navigationItems={navigationItems} title="Profile" role="Citizen">
-      {/* Header Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-8"
+        className="mb-8 flex items-center justify-between"
       >
-        <h1 
-          className="text-3xl md:text-4xl text-[#0A1F44] mb-2"
-          style={{ fontFamily: "'Playfair Display', serif" }}
-        >
-          {isGuest ? 'Guest Profile' : 'My Profile'}
-        </h1>
-        <p className="text-[#64748B] text-lg">
-          {isGuest ? 'Browsing as guest user' : 'View and manage your profile information'}
-        </p>
+        <div>
+          <h1 className="text-3xl md:text-4xl text-[#0A1F44] mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
+            My Profile
+          </h1>
+          <p className="text-[#64748B] text-lg">View and manage your profile information</p>
+        </div>
+        {!isEditing ? (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-[#FF9933] text-white rounded-lg hover:bg-[#E87F1F] transition-all"
+          >
+            <Edit2 className="w-5 h-5" />
+            Edit Profile
+          </button>
+        ) : (
+          <div className="flex gap-3">
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 px-6 py-3 bg-[#138808] text-white rounded-lg hover:bg-[#0f6c06] transition-all"
+            >
+              <Save className="w-5 h-5" />
+              Save Changes
+            </button>
+          </div>
+        )}
       </motion.div>
 
-      {isGuest ? (
-        /* Guest User Message */
+      <div className="space-y-6">
+        {/* Profile Header Card */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center py-16 glass-white rounded-xl"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-white rounded-xl p-8 card-elevated"
         >
-          <div className="w-20 h-20 rounded-full bg-[#FF9933]/10 flex items-center justify-center mx-auto mb-6">
-            <User className="w-10 h-10 text-[#FF9933]" />
-          </div>
-          <h3 className="text-2xl text-[#0A1F44] mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
-            Guest User
-          </h3>
-          <p className="text-[#64748B] mb-6 max-w-md mx-auto">
-            You are currently browsing as a guest. Create an account to access your profile, save bookmarks, and track your learning progress.
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <a
-              href="/auth/citizen/signup"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#FF9933] text-white rounded-lg hover:bg-[#E87F1F] transition-all hover-lift"
-            >
-              Create Account
-            </a>
-            <a
-              href="/auth/citizen/login"
-              className="inline-flex items-center gap-2 px-6 py-3 border-2 border-[#0A1F44] text-[#0A1F44] rounded-lg hover:bg-[#0A1F44] hover:text-white transition-all"
-            >
-              Sign In
-            </a>
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="relative">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#FF9933] to-[#FFB366] flex items-center justify-center">
+                <User className="w-16 h-16 text-white" />
+              </div>
+            </div>
+
+            <div className="flex-1 text-center md:text-left">
+              {!isEditing ? (
+                <>
+                  <h2 className="text-3xl text-[#0A1F44] mb-2 font-serif">{profileData.name}</h2>
+                  <p className="text-[#64748B] mb-4">{profileData.bio || 'Sharing insights and learning about the Indian Constitution.'}</p>
+                </>
+              ) : (
+                <div className="space-y-4 max-w-xl">
+                  <input
+                    type="text"
+                    value={editData.name}
+                    onChange={(e) => setEditData({...editData, name: e.target.value})}
+                    className="w-full px-4 py-2 border rounded-lg"
+                    placeholder="Full Name"
+                  />
+                  <textarea
+                    value={editData.bio}
+                    onChange={(e) => setEditData({...editData, bio: e.target.value})}
+                    className="w-full px-4 py-2 border rounded-lg resize-none"
+                    placeholder="Tell us about yourself..."
+                    rows={2}
+                  />
+                </div>
+              )}
+              
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-[#64748B]">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  <span>{profileData.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span>Joined {profileData.joinedDate}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </motion.div>
-      ) : (
-        /* Profile Content - Empty State for Backend Integration */
-        <div className="space-y-6">
-          {/* Profile Header Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="glass-white rounded-xl p-8 card-elevated"
-          >
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              {/* Profile Picture Placeholder */}
-              <div className="relative">
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#FF9933] to-[#FFB366] flex items-center justify-center">
-                  <User className="w-16 h-16 text-white" />
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { icon: BookIcon, label: 'Articles Read', value: profileData.stats.articlesRead, color: 'from-[#FF9933] to-[#FFB366]' },
+            { icon: Bookmark, label: 'Bookmarks', value: profileData.stats.bookmarks, color: 'from-[#0A1F44] to-[#1A3A6B]' },
+            { icon: Award, label: 'Quiz Score', value: profileData.stats.quizScore, color: 'from-[#138808] to-[#1ea712]' },
+            { icon: Clock, label: 'Learning Level', value: 'Lv.4', color: 'from-[#1A3A6B] to-[#2A4A7B]' }
+          ].map((stat, i) => (
+            <div key={i} className="glass-white rounded-xl p-6 text-center">
+              <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${stat.color} flex items-center justify-center mx-auto mb-3`}>
+                <stat.icon className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-3xl text-[#0A1F44] mb-1 font-serif">{stat.value}</div>
+              <div className="text-sm text-[#64748B]">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Contact Details */}
+          <div className="glass-white rounded-xl p-6 card-elevated">
+            <h3 className="text-xl text-[#0A1F44] mb-6 font-serif">Contact Information</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Phone className="w-5 h-5 text-[#64748B]" />
+                <div className="flex-1">
+                  <div className="text-xs text-[#64748B]">Phone Number</div>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="w-full border-b focus:border-[#FF9933] outline-none py-1"
+                      value={editData.phone}
+                      onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                    />
+                  ) : (
+                    <div className="text-[#0A1F44]">{profileData.phone || 'Not Provided'}</div>
+                  )}
                 </div>
-                <div className="absolute bottom-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center border-2 border-[#FF9933]">
-                  <div className="w-3 h-3 bg-[#138808] rounded-full"></div>
+              </div>
+              <div className="flex items-center gap-4">
+                <MapPin className="w-5 h-5 text-[#64748B]" />
+                <div className="flex-1">
+                  <div className="text-xs text-[#64748B]">Location</div>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="w-full border-b focus:border-[#FF9933] outline-none py-1"
+                      value={editData.location}
+                      onChange={(e) => setEditData({...editData, location: e.target.value})}
+                      placeholder="City, State"
+                    />
+                  ) : (
+                    <div className="text-[#0A1F44]">{profileData.location || 'Not Provided'}</div>
+                  )}
                 </div>
               </div>
-
-              {/* Profile Info Placeholder */}
-              <div className="flex-1 text-center md:text-left">
-                <div className="h-8 w-48 bg-[#F1F5F9] rounded-lg mb-3 mx-auto md:mx-0"></div>
-                <div className="h-5 w-64 bg-[#F1F5F9] rounded-lg mb-4 mx-auto md:mx-0"></div>
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-[#64748B]" />
-                    <div className="h-4 w-40 bg-[#F1F5F9] rounded"></div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-[#64748B]" />
-                    <div className="h-4 w-32 bg-[#F1F5F9] rounded"></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Edit Button */}
-              <button className="px-6 py-3 bg-[#FF9933] text-white rounded-lg hover:bg-[#E87F1F] transition-all opacity-50 cursor-not-allowed" disabled>
-                Edit Profile
-              </button>
             </div>
-          </motion.div>
-
-          {/* Stats Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-4 gap-6"
-          >
-            <div className="glass-white rounded-xl p-6 text-center">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#FF9933] to-[#FFB366] flex items-center justify-center mx-auto mb-3">
-                <BookIcon className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-3xl text-[#0A1F44] mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
-                --
-              </div>
-              <div className="text-sm text-[#64748B]">Articles Read</div>
-            </div>
-
-            <div className="glass-white rounded-xl p-6 text-center">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#0A1F44] to-[#1A3A6B] flex items-center justify-center mx-auto mb-3">
-                <Bookmark className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-3xl text-[#0A1F44] mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
-                --
-              </div>
-              <div className="text-sm text-[#64748B]">Bookmarks</div>
-            </div>
-
-            <div className="glass-white rounded-xl p-6 text-center">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#138808] to-[#1ea712] flex items-center justify-center mx-auto mb-3">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-3xl text-[#0A1F44] mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
-                --
-              </div>
-              <div className="text-sm text-[#64748B]">Quiz Score</div>
-            </div>
-
-            <div className="glass-white rounded-xl p-6 text-center">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#1A3A6B] to-[#2A4A7B] flex items-center justify-center mx-auto mb-3">
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-3xl text-[#0A1F44] mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
-                --
-              </div>
-              <div className="text-sm text-[#64748B]">Hours Spent</div>
-            </div>
-          </motion.div>
-
-          {/* Additional Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Personal Information */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="glass-white rounded-xl p-6 card-elevated"
-            >
-              <h3 className="text-xl text-[#0A1F44] mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Personal Information
-              </h3>
-              <div className="space-y-4">
-                {[
-                  { icon: User, label: 'Full Name' },
-                  { icon: Mail, label: 'Email Address' },
-                  { icon: Phone, label: 'Phone Number' },
-                  { icon: MapPin, label: 'Location' },
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <item.icon className="w-5 h-5 text-[#64748B]" />
-                    <div className="flex-1">
-                      <div className="text-xs text-[#64748B] mb-1">{item.label}</div>
-                      <div className="h-5 w-full bg-[#F1F5F9] rounded"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Learning Progress */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="glass-white rounded-xl p-6 card-elevated"
-            >
-              <h3 className="text-xl text-[#0A1F44] mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Learning Progress
-              </h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'Fundamental Rights', progress: 0 },
-                  { label: 'Fundamental Duties', progress: 0 },
-                  { label: 'Directive Principles', progress: 0 },
-                  { label: 'Union Government', progress: 0 },
-                ].map((item, index) => (
-                  <div key={index}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-[#64748B]">{item.label}</span>
-                      <span className="text-sm text-[#0A1F44]">--</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-[#FF9933] to-[#FFB366]"
-                        style={{ width: `${item.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
           </div>
 
-          {/* Backend Integration Notice */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="bg-[#0A1F44]/5 border border-[#0A1F44]/10 rounded-xl p-6"
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-lg bg-[#0A1F44]/10 flex items-center justify-center flex-shrink-0">
-                <TrendingUp className="w-6 h-6 text-[#0A1F44]" />
-              </div>
-              <div>
-                <h4 className="text-lg text-[#0A1F44] mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  Profile Data Integration
-                </h4>
-                <p className="text-[#64748B] text-sm leading-relaxed">
-                  Your profile data will be automatically populated once the backend system is connected. 
-                  All your learning progress, bookmarks, quiz scores, and personal information will be 
-                  securely stored and displayed here.
-                </p>
-              </div>
+          {/* Learning Progress (Visual only) */}
+          <div className="glass-white rounded-xl p-6 card-elevated">
+            <h3 className="text-xl text-[#0A1F44] mb-6 font-serif">Learning Insights</h3>
+            <div className="space-y-4">
+              {[
+                { label: 'Fundamental Rights', progress: 85 },
+                { label: 'Fundamental Duties', progress: 40 },
+                { label: 'Directive Principles', progress: 20 },
+                { label: 'Union Government', progress: 10 },
+              ].map((item, index) => (
+                <div key={index}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-[#64748B]">{item.label}</span>
+                    <span className="text-sm text-[#0A1F44]">{item.progress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-[#FF9933] to-[#FFB366]"
+                      style={{ width: `${item.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </motion.div>
+          </div>
         </div>
-      )}
+      </div>
     </DashboardLayout>
   );
 }

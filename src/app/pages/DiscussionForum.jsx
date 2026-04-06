@@ -52,28 +52,57 @@ export default function DiscussionForum() {
   }, [selectedCategory]);
 
   const fetchThreads = async () => {
-    let query = supabase
-      .from('forum_threads')
-      .select('*, profiles(full_name), categories(name)')
-      .order('created_at', { ascending: false });
-    
-    if (selectedCategory !== 'all') {
-      query = query.eq('category_id', selectedCategory);
-    }
+    try {
+      // Fetch threads with author and category names
+      const { data: threadsData, error } = await supabase
+        .from('forum_threads')
+        .select('*, profiles(full_name), categories(name)')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
 
-    const { data } = await query;
+      // For each thread, fetch reply counts and like counts
+      const threadsWithStats = await Promise.all((threadsData || []).map(async (t) => {
+        const { count: replyCount } = await supabase
+          .from('forum_posts')
+          .select('*', { count: 'exact', head: true })
+          .eq('thread_id', t.id);
+
+        const { count: likeCount } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('content_id', t.id)
+          .eq('content_type', 'forum_thread');
+
+        return {
+          id: t.id,
+          title: t.title,
+          content: t.content,
+          author: t.profiles?.full_name || 'Anonymous',
+          category: t.categories?.name || 'General',
+          likes: likeCount || 0,
+          replies: replyCount || 0,
+          time: new Date(t.created_at).toLocaleDateString(),
+          preview: t.content.substring(0, 150) + '...',
+          trending: (replyCount || 0) > 5
+        };
+      }));
+
+      setThreads(threadsWithStats);
+    } catch (err) {
+      console.error('Error fetching threads:', err);
+    }
+  };
+
+  const fetchReplies = async (threadId) => {
+    const { data, error } = await supabase
+      .from('forum_posts')
+      .select('*, profiles(full_name)')
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true });
+    
     if (data) {
-      setThreads(data.map(t => ({
-        id: t.id,
-        title: t.title,
-        author: t.profiles?.full_name || 'Anonymous',
-        category: t.categories?.name || 'General',
-        likes: 0, // Mocked
-        replies: 0, // Mocked
-        time: new Date(t.created_at).toLocaleDateString(),
-        preview: t.content.substring(0, 150) + '...',
-        trending: false
-      })));
+      setReplies(prev => ({ ...prev, [threadId]: data }));
     }
   };
 
@@ -105,6 +134,72 @@ export default function DiscussionForum() {
       alert('Error posting discussion: ' + error.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleLike = async (contentId, contentType) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('Please login to like');
+        return;
+      }
+
+      // Check if already liked
+      const { data: existingLike } = await supabase
+        .from('likes')
+        .select('*')
+        .eq('content_id', contentId)
+        .eq('content_type', contentType)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingLike) {
+        // Unlike
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('id', existingLike.id);
+      } else {
+        // Like
+        await supabase
+          .from('likes')
+          .insert([{
+            content_id: contentId,
+            content_type: contentType,
+            user_id: user.id
+          }]);
+      }
+      
+      await fetchThreads();
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  const handlePostReply = async (threadId, content) => {
+    if (!content.trim()) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('Please login to reply');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('forum_posts')
+        .insert([{
+          thread_id: threadId,
+          content: content,
+          author_id: user.id
+        }]);
+
+      if (error) throw error;
+      
+      await fetchReplies(threadId);
+      await fetchThreads(); // Update reply count
+    } catch (error) {
+      alert('Error posting reply: ' + error.message);
     }
   };
 
@@ -202,35 +297,99 @@ export default function DiscussionForum() {
               {threads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="bg-white rounded-xl p-6 shadow-sm border border-[#E2E8F0] hover:shadow-md transition-all cursor-pointer"
-                  onClick={() => setExpandedThread(expandedThread === thread.id ? null : thread.id)}
+                  className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden"
                 >
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF9933] to-[#0A1F44] flex items-center justify-center flex-shrink-0">
-                      <User className="w-6 h-6 text-white" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <h3 className="text-lg text-[#0A1F44] font-medium hover:text-[#FF9933] transition-colors font-serif">
-                          {thread.title}
-                        </h3>
-                        <span className="px-2 py-1 bg-[#F8FAFC] text-[#64748B] rounded text-xs">
-                          {thread.category}
-                        </span>
+                  <div 
+                    className="p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      if (expandedThread !== thread.id) {
+                        setExpandedThread(thread.id);
+                        fetchReplies(thread.id);
+                      } else {
+                        setExpandedThread(null);
+                      }
+                    }}
+                  >
+                    <div className="flex gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF9933] to-[#0A1F44] flex items-center justify-center flex-shrink-0">
+                        <User className="w-6 h-6 text-white" />
                       </div>
 
-                      <p className="text-[#64748B] text-sm mb-4 line-clamp-2">
-                        {thread.preview}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <h3 className="text-lg text-[#0A1F44] font-medium hover:text-[#FF9933] transition-colors font-serif">
+                            {thread.title}
+                          </h3>
+                          <span className="px-2 py-1 bg-[#F8FAFC] text-[#64748B] rounded text-xs">
+                            {thread.category}
+                          </span>
+                        </div>
 
-                      <div className="flex items-center gap-4 text-sm text-[#64748B]">
-                        <span className="flex items-center gap-1.5"><User className="w-4 h-4" />{thread.author}</span>
-                        <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{thread.time}</span>
-                        <span className="flex items-center gap-1.5"><MessageCircle className="w-4 h-4" />{thread.replies} replies</span>
+                        <p className="text-[#64748B] text-sm mb-4">
+                          {expandedThread === thread.id ? thread.content : thread.preview}
+                        </p>
+
+                        <div className="flex items-center gap-4 text-sm text-[#64748B]">
+                          <span className="flex items-center gap-1.5"><User className="w-4 h-4" />{thread.author}</span>
+                          <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{thread.time}</span>
+                          <span className="flex items-center gap-1.5"><MessageCircle className="w-4 h-4" />{thread.replies} replies</span>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  <AnimatePresence>
+                    {expandedThread === thread.id && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-gray-50 border-t border-gray-100 p-6"
+                      >
+                        <div className="space-y-4 mb-6">
+                          <h4 className="font-medium text-[#0A1F44] flex items-center gap-2">
+                            <MessageSquare className="w-4 h-4" />
+                            Replies
+                          </h4>
+                          {replies[thread.id]?.length > 0 ? (
+                            replies[thread.id].map((reply) => (
+                              <div key={reply.id} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-[#0A1F44]">{reply.profiles?.full_name || 'Anonymous'}</span>
+                                  <span className="text-[10px] text-[#64748B]">{new Date(reply.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-sm text-[#64748B] leading-relaxed">{reply.content}</p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-[#94A3B8] italic">No replies yet. Be the first to join the conversation!</p>
+                          )}
+                        </div>
+
+                        {/* Reply Form */}
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <textarea
+                              id={`reply-${thread.id}`}
+                              placeholder="Write a reply..."
+                              className="w-full px-4 py-2 text-sm border rounded-lg focus:ring-1 focus:ring-[#FF9933] outline-none border-gray-200 resize-none"
+                              rows={2}
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const textarea = document.getElementById(`reply-${thread.id}`);
+                              handlePostReply(thread.id, textarea.value);
+                              textarea.value = '';
+                            }}
+                            className="px-4 py-2 bg-[#FF9933] text-white text-sm rounded-lg hover:bg-[#E87F1F] self-end h-fit transition-all"
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ))}
 

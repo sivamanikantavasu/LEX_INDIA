@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { 
@@ -6,12 +6,15 @@ import {
   Settings, CheckCircle, User, Mail, Phone, MapPin, Award, 
   Edit2, Save, X, Camera
 } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function EducatorProfile() {
+  const { user, updateProfile: authUpdateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [profileData, setProfileData] = useState({
     name: '',
-    email: sessionStorage.getItem('userEmail') || '',
+    email: '',
     phone: '',
     qualification: '',
     specialization: '',
@@ -23,15 +26,60 @@ export default function EducatorProfile() {
   });
 
   const [editData, setEditData] = useState(profileData);
+  const [stats, setStats] = useState([
+    { label: 'Articles Published', value: '0', color: 'from-[#0A1F44] to-[#1A3A6B]' },
+    { label: 'Sessions Conducted', value: '0', color: 'from-[#FF9933] to-[#FFB366]' },
+    { label: 'Students Taught', value: '0', color: 'from-[#138808] to-[#1ea712]' },
+    { label: 'Years Experience', value: '0', color: 'from-[#1A3A6B] to-[#0A1F44]' }
+  ]);
 
-  const navigationItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/educator' },
-    { label: 'Schedule Sessions', icon: Calendar, path: '/educator/sessions' },
-    { label: 'Commentary', icon: FileText, path: '/educator/articles' },
-    { label: 'Quiz Creator', icon: CheckCircle, path: '/educator/quiz' },
-    { label: 'Student Interaction', icon: Users, path: '/educator/students' },
-    { label: 'Settings', icon: Settings, path: '/educator/settings' },
-  ];
+  useEffect(() => {
+    async function fetchProfile() {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (data) {
+        const mappedData = {
+          name: data.full_name || '',
+          email: user.email || '',
+          phone: data.phone || '',
+          bio: data.bio || '',
+          location: data.city ? `${data.city}, ${data.state}` : '',
+          qualification: data.metadata?.qualification || '',
+          specialization: data.metadata?.specialization || '',
+          institution: data.metadata?.institution || '',
+          experience: data.metadata?.experience || '0',
+          achievements: data.metadata?.achievements || []
+        };
+        setProfileData(mappedData);
+        setEditData(mappedData);
+      }
+    }
+    fetchProfile();
+  }, [user]);
+
+  useEffect(() => {
+    async function fetchStats() {
+      if (!user) return;
+      
+      const [{ count: articlesCount }, { count: sessionsCount }] = await Promise.all([
+        supabase.from('articles').select('*', { count: 'exact', head: true }).eq('author_id', user.id),
+        supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('educator_id', user.id)
+      ]);
+      
+      setStats([
+        { label: 'Articles Published', value: String(articlesCount || 0), color: 'from-[#0A1F44] to-[#1A3A6B]' },
+        { label: 'Sessions Conducted', value: String(sessionsCount || 0), color: 'from-[#FF9933] to-[#FFB366]' },
+        { label: 'Students Taught', value: '0', color: 'from-[#138808] to-[#1ea712]' },
+        { label: 'Years Experience', value: profileData.experience || '0', color: 'from-[#1A3A6B] to-[#0A1F44]' }
+      ]);
+    }
+    fetchStats();
+  }, [user, profileData.experience]);
 
   const handleEdit = () => {
     setEditData(profileData);
@@ -43,22 +91,30 @@ export default function EducatorProfile() {
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    setProfileData(editData);
-    setIsEditing(false);
-    alert('Profile updated successfully!');
+  const handleSave = async () => {
+    const [city, state] = editData.location.split(',').map(s => s.trim());
+    try {
+      await authUpdateProfile({
+        full_name: editData.name,
+        phone: editData.phone,
+        city: city || '',
+        state: state || '',
+        bio: editData.bio,
+        metadata: {
+          qualification: editData.qualification,
+          specialization: editData.specialization,
+          institution: editData.institution,
+          experience: editData.experience,
+          achievements: editData.achievements
+        }
+      });
+      setProfileData(editData);
+      setIsEditing(false);
+      alert('Profile updated successfully!');
+    } catch (error) {
+      alert('Error updating profile: ' + error.message);
+    }
   };
-
-  const handleInputChange = (field, value) => {
-    setEditData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const stats = [
-    { label: 'Articles Published', value: '0', color: 'from-[#0A1F44] to-[#1A3A6B]' },
-    { label: 'Sessions Conducted', value: '0', color: 'from-[#FF9933] to-[#FFB366]' },
-    { label: 'Students Taught', value: '0', color: 'from-[#138808] to-[#1ea712]' },
-    { label: 'Years Experience', value: profileData.experience || '0', color: 'from-[#1A3A6B] to-[#0A1F44]' }
-  ];
 
   return (
     <DashboardLayout navigationItems={navigationItems} title="Educator Profile" role="Educator">

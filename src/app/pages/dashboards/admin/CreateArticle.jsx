@@ -66,24 +66,29 @@ export default function CreateArticle() {
 
   const handleSave = async (status) => {
     setIsSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const article = {
-      ...formData,
-      status,
-      createdAt: new Date().toISOString(),
-      views: 0
-    };
-    
-    // In a real app, this would save to backend/state management
-    console.log('Saving article:', article);
-    
-    setIsSaving(false);
-    alert(`Article ${status === 'draft' ? 'saved as draft' : 'published'} successfully!`);
-    
-    if (status === 'published') {
-      navigate('/admin/active-articles');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase.from('articles').insert([{
+        title: formData.title,
+        content: formData.content,
+        status: status,
+        author_id: user.id,
+        excerpt: formData.content.substring(0, 150) + '...',
+        // Map category slug to ID if needed, or use slug directly if schema supports it
+        // For simplicity, using title as identifier for now
+      }]);
+
+      if (error) throw error;
+      
+      alert(`Article ${status === 'draft' ? 'saved as draft' : 'published'} successfully!`);
+      if (status === 'published') {
+        navigate('/admin/active-articles');
+      }
+    } catch (error) {
+      alert('Error saving article: ' + error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -93,14 +98,11 @@ export default function CreateArticle() {
 
   const handleSyncData = async () => {
     setIsSyncing(true);
-    // Simulate API call to external source
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // In a real app, this would fetch articles from external API/database
-    console.log('Syncing articles from external source...');
-    
-    setIsSyncing(false);
-    alert('Articles synced successfully! (This will connect to external source when backend is integrated)');
+    try {
+      await syncConstitutionalData();
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (

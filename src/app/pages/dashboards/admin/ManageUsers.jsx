@@ -56,15 +56,14 @@ export default function ManageUsers() {
     setShowAddModal(true);
   };
 
-  const handleSubmitNewUser = (e) => {
+  const handleSubmitNewUser = async (e) => {
     e.preventDefault();
-    addUser(formData);
+    await addUser(formData);
     setShowAddModal(false);
-    alert(`User ${formData.name} added successfully!`);
   };
 
   const handleViewUser = (user) => {
-    alert(`Viewing details for: ${user.name}\nEmail: ${user.email}\nRole: ${user.role}\nStatus: ${user.status}`);
+    alert(`Viewing details for: ${user.name}\nEmail: ${user.email}\nPhone: ${user.phone}\nRole: ${user.role}\nLocation: ${user.location}`);
   };
 
   const handleEditUser = (user) => {
@@ -80,17 +79,15 @@ export default function ManageUsers() {
     setShowEditModal(true);
   };
 
-  const handleSubmitEditUser = (e) => {
+  const handleSubmitEditUser = async (e) => {
     e.preventDefault();
-    updateUser(currentUser.id, formData);
+    await updateUser(currentUser.id, formData);
     setShowEditModal(false);
-    alert(`User ${formData.name} updated successfully!`);
   };
 
-  const handleDeleteUser = (user) => {
+  const handleDeleteUser = async (user) => {
     if (window.confirm(`Are you sure you want to delete ${user.name}?`)) {
-      deleteUser(user.id);
-      alert(`User ${user.name} deleted successfully!`);
+      await deleteUser(user.id);
     }
   };
 
