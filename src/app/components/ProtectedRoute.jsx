@@ -33,6 +33,8 @@ export default function ProtectedRoute({ children, requiredRole }) {
     }
   }, [navigate, requiredRole, location.pathname, user, role, loading]);
 
+  const isAuthorized = user && (!requiredRole || role === requiredRole);
+  
   // Show loading state while checking authorization
   if (loading) {
     return (
