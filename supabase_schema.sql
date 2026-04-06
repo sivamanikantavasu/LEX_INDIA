@@ -14,6 +14,9 @@ DROP TABLE IF EXISTS forum_threads CASCADE;
 DROP TABLE IF EXISTS articles CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS advisory_requests CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS sync_logs CASCADE;
+DROP TABLE IF EXISTS broadcasts CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
 
 -- 1. Create custom types
@@ -322,8 +325,8 @@ BEGIN
   INSERT INTO public.profiles (id, username, full_name, avatar_url, role, phone, city, state)
   VALUES (
     new.id, 
-    new.raw_user_meta_data->>'username', 
-    new.raw_user_meta_data->>'full_name', 
+    COALESCE(new.raw_user_meta_data->>'username', substring(new.email from '(.*)@')), 
+    COALESCE(new.raw_user_meta_data->>'full_name', 'User'), 
     new.raw_user_meta_data->>'avatar_url', 
     COALESCE((new.raw_user_meta_data->>'role')::user_role, 'citizen'),
     new.raw_user_meta_data->>'phone',
@@ -334,6 +337,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();

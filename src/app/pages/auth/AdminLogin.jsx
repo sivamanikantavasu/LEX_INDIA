@@ -27,6 +27,7 @@ export default function AdminLogin() {
         options: {
           data: {
             full_name: 'System Admin',
+            username: 'admin',
             role: 'admin'
           }
         }
