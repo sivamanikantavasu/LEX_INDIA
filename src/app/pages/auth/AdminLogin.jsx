@@ -59,8 +59,11 @@ export default function AdminLogin() {
 
       if (loginError) throw loginError;
       
-      alert('Admin account configured! Redirecting...');
-      navigate('/admin');
+      alert('Admin account configured! Finalizing session...');
+      // Force a slight delay to allow the AuthContext trigger/subscription to catch up
+      setTimeout(() => {
+        window.location.href = '/admin';
+      }, 1000);
     } catch (error) {
       alert('Setup failed: ' + error.message);
     } finally {

@@ -5,17 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 export default function ProtectedRoute({ children, requiredRole }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, roleLoading } = useAuth();
+  const isActuallyLoading = loading || roleLoading;
 
   useEffect(() => {
-    if (loading) return;
-
-    console.log('ProtectedRoute check:', {
-      user: !!user,
-      role,
-      requiredRole,
-      currentPath: location.pathname
-    });
+    if (isActuallyLoading) return;
 
     // If not authenticated or wrong role, redirect to appropriate login
     if (!user || (requiredRole && role !== requiredRole)) {
@@ -28,10 +22,10 @@ export default function ProtectedRoute({ children, requiredRole }) {
       };
 
       const loginRoute = loginRoutes[requiredRole] || '/';
-      console.log('Redirecting to:', loginRoute);
+      console.log('ProtectedRoute: Redirecting to:', loginRoute, 'Reason:', !user ? 'No User' : `Role mismatch (Got: ${role}, Need: ${requiredRole})`);
       navigate(loginRoute, { replace: true });
     }
-  }, [navigate, requiredRole, location.pathname, user, role, loading]);
+  }, [navigate, requiredRole, location.pathname, user, role, isActuallyLoading]);
 
   const isAuthorized = user && (!requiredRole || role === requiredRole);
   

@@ -35,16 +35,7 @@ export default function Verification() {
     if (validateCaptcha(userInput, captcha)) {
       setSuccess(true);
       
-      // Set authentication state in localStorage (persists across sessions)
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('userEmail', email);
-      
-      console.log('Authentication data set:', {
-        isAuthenticated: localStorage.getItem('isAuthenticated'),
-        userRole: localStorage.getItem('userRole'),
-        userEmail: localStorage.getItem('userEmail')
-      });
+      console.log('Captcha validated successfully for:', email);
       
       // Simulate verification process
       setTimeout(() => {
@@ -57,7 +48,9 @@ export default function Verification() {
         };
         const targetPath = dashboardPaths[role] || '/citizen';
         console.log('Redirecting to dashboard:', targetPath);
-        navigate(targetPath, { replace: true });
+        // We use window.location.href to force a full recharge of the AuthContext
+        // if there's any lag in the subscription.
+        window.location.href = targetPath;
       }, 1500);
     } else {
       setError('Invalid captcha code. Please try again.');

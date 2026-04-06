@@ -1,25 +1,44 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
-import { Shield, Mail, Lock, Eye, EyeOff, ArrowLeft, Scale } from 'lucide-react';
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowLeft, Scale, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function LegalExpertLogin() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/verify', {
-      state: {
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email,
-        role: 'legal-expert',
-        type: 'login'
+        password: formData.password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        navigate('/verify', {
+          state: {
+            email: formData.email,
+            role: 'legal-expert',
+            type: 'login'
+          }
+        });
       }
-    });
+    } catch (error) {
+      alert(error.message || 'Invalid legal expert credentials');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -130,9 +149,17 @@ export default function LegalExpertLogin() {
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-gradient-to-r from-[#138808] to-[#1ea712] text-white rounded-lg hover:shadow-lg transition-all hover-lift"
+              disabled={loading}
+              className="w-full py-3.5 bg-gradient-to-r from-[#138808] to-[#1ea712] text-white rounded-lg hover:shadow-lg transition-all hover-lift disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Sign In to Legal Portal
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                'Sign In to Legal Portal'
+              )}
             </button>
           </form>
 
