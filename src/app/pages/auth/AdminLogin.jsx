@@ -7,6 +7,11 @@ import { supabase } from '@/lib/supabase';
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
   const [showSetupButton, setShowSetupButton] = useState(false);
 
   const handleEmergencySetup = async () => {

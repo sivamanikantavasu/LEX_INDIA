@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router';
+import { motion } from 'motion/react';
 import { Scale, Mail, Lock, Eye, EyeOff, ArrowLeft, User, Phone, Briefcase, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 

@@ -325,9 +325,6 @@ export default function CitizenSignup() {
           <div className="mt-8 pt-6 border-t border-[#1A3A6B]/10">
             <p className="text-sm text-[#64748B] text-center mb-3">Join as different role:</p>
             <div className="grid grid-cols-3 gap-2">
-              <Link to="/auth/admin/signup" className="text-xs text-center py-2 px-2 bg-[#0A1F44]/5 text-[#0A1F44] rounded-lg hover:bg-[#0A1F44]/10 transition-colors">
-                Admin
-              </Link>
               <Link to="/auth/educator/signup" className="text-xs text-center py-2 px-2 bg-[#FF9933]/5 text-[#FF9933] rounded-lg hover:bg-[#FF9933]/10 transition-colors">
                 Educator
               </Link>
