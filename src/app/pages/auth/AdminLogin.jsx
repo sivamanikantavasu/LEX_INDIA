@@ -18,15 +18,43 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
+      let email = formData.email;
+
+      // 1. Check if the input is an email. If not, treat as username.
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      
+      if (!isEmail) {
+        // Try to find the user's email from the 'profiles' desk based on username
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', email)
+          .single();
+
+        if (profileError || !profile) {
+          throw new Error('No admin profile found with that username');
+        }
+
+        // Supabase Auth requires an email. We need to find the email in auth.users by ID.
+        // Note: For privacy, Supabase doesn't let us query auth.users directly.
+        // However, if the user signed up correctly, the 'username' should belong to a profile 
+        // with a matching ID in auth.users.
+        // In this case, we have to assume the user knows their actual email IF they use it for login.
+        // BUT, if they used 'Admin@123', they likely don't know their email.
+        
+        // WORKAROUND: If they use a username, they STILL need to sign in with an email. 
+        // I will add a helpful hint to the error message.
+        throw new Error('Please enter your registered Email address (e.g. admin@lexindia.com). Login by username is coming soon.');
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
+        email: email,
         password: formData.password,
       });
 
       if (error) throw error;
 
       if (data.user) {
-        // Successful login
         navigate('/admin');
       }
     } catch (error) {
