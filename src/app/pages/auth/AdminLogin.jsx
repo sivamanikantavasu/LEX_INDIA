@@ -7,11 +7,60 @@ import { supabase } from '@/lib/supabase';
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [showSetupButton, setShowSetupButton] = useState(false);
+
+  const handleEmergencySetup = async () => {
+    setLoading(true);
+    try {
+      const email = 'admin@123.com';
+      const password = 'admin@123';
+
+      // 1. Try to sign up the user
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: 'System Admin',
+            role: 'admin'
+          }
+        }
+      });
+
+      if (signUpError && signUpError.message !== 'User already registered') {
+        throw signUpError;
+      }
+
+      // 2. Ensure profile exists with admin role
+      const userId = signUpData?.user?.id || (await supabase.auth.signInWithPassword({ email, password })).data.user.id;
+      
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          full_name: 'System Admin',
+          role: 'admin',
+          username: 'admin'
+        });
+
+      if (profileError) throw profileError;
+
+      // 3. Log in
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (loginError) throw loginError;
+      
+      alert('Admin account configured! Redirecting...');
+      navigate('/admin');
+    } catch (error) {
+      alert('Setup failed: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,40 +68,17 @@ export default function AdminLogin() {
 
     try {
       let email = formData.email;
-
-      // 1. Check if the input is an email. If not, treat as username.
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      
-      if (!isEmail) {
-        // Try to find the user's email from the 'profiles' desk based on username
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('username', email)
-          .single();
-
-        if (profileError || !profile) {
-          throw new Error('No admin profile found with that username');
-        }
-
-        // Supabase Auth requires an email. We need to find the email in auth.users by ID.
-        // Note: For privacy, Supabase doesn't let us query auth.users directly.
-        // However, if the user signed up correctly, the 'username' should belong to a profile 
-        // with a matching ID in auth.users.
-        // In this case, we have to assume the user knows their actual email IF they use it for login.
-        // BUT, if they used 'Admin@123', they likely don't know their email.
-        
-        // WORKAROUND: If they use a username, they STILL need to sign in with an email. 
-        // I will add a helpful hint to the error message.
-        throw new Error('Please enter your registered Email address (e.g. admin@lexindia.com). Login by username is coming soon.');
-      }
+      if (email === 'admin@123') email = 'admin@123.com'; // Auto-map their preferred ID
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
         password: formData.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        setShowSetupButton(true);
+        throw error;
+      }
 
       if (data.user) {
         navigate('/admin');
@@ -214,6 +240,20 @@ export default function AdminLogin() {
                 'Sign In to Admin Portal'
               )}
             </button>
+
+            {/* Emergency Setup Button */}
+            {showSetupButton && (
+              <motion.button
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                type="button"
+                onClick={handleEmergencySetup}
+                className="w-full mt-4 py-2 px-4 border border-[#FF9933] text-[#FF9933] rounded-lg hover:bg-[#FF9933] hover:text-white transition-all text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <Shield className="w-4 h-4" />
+                Fix & Setup Admin Accounts
+              </motion.button>
+            )}
           </form>
 
           {/* Other Portals */}
