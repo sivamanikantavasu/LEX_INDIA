@@ -75,7 +75,7 @@ SELECT
 FROM quizzes q WHERE q.title = 'Master the Preamble' LIMIT 1;
 
 -- 6. Insert Achievements
-INSERT INTO achievements (name, description, points_required, icon_url) VALUES
+INSERT INTO achievements (name, description, points_reward, icon_url) VALUES
 ('Legal Scholar', 'Completed 5 constitutional quizzes.', 50, 'shield'),
 ('Civic Leader', 'Read all foundational articles.', 30, 'award'),
 ('Law Guardian', 'Achieved a perfect score in a criminal law quiz.', 100, 'star');
