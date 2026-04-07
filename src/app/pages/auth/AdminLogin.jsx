@@ -20,6 +20,8 @@ export default function AdminLogin() {
       const email = 'admin@123.com';
       const password = 'admin@123';
 
+      console.log('Starting Emergency Setup for Admin...');
+
       // 1. Try to sign up the user
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -33,38 +35,44 @@ export default function AdminLogin() {
         }
       });
 
-      if (signUpError && signUpError.message !== 'User already registered') {
+      // Ignore "already registered" - that's a good sign
+      if (signUpError && !signUpError.message?.includes('already registered')) {
         throw signUpError;
       }
 
-      // 2. Ensure profile exists with admin role
-      const userId = signUpData?.user?.id || (await supabase.auth.signInWithPassword({ email, password })).data.user.id;
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          full_name: 'System Admin',
-          role: 'admin',
-          username: 'admin'
-        });
-
-      if (profileError) throw profileError;
-
-      // 3. Log in
-      const { error: loginError } = await supabase.auth.signInWithPassword({
+      // 2. Log in to get the user context
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (loginError) throw loginError;
-      
-      alert('Admin account configured! Finalizing session...');
-      // Force a slight delay to allow the AuthContext trigger/subscription to catch up
-      setTimeout(() => {
-        window.location.href = '/admin';
-      }, 1000);
+      if (signInError) throw signInError;
+
+      const user = signInData.user;
+      if (!user) throw new Error('Failed to retrieve user session');
+
+      // 3. Force-create the profile record (MANUAL OVERRIDE)
+      console.log('Force-creating Admin profile for user:', user.id);
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          username: 'admin',
+          full_name: 'System Admin',
+          role: 'admin'
+        }, { 
+          onConflict: 'id' 
+        });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        throw new Error('Database profile creation failed. Check your Supabase Table Editor.');
+      }
+
+      alert('SUCCESS! Admin system stabilized. Redirecting...');
+      window.location.href = '/admin';
     } catch (error) {
+      console.error('Emergency Setup Error:', error);
       alert('Setup failed: ' + error.message);
     } finally {
       setLoading(false);
@@ -77,11 +85,17 @@ export default function AdminLogin() {
 
     try {
       let email = formData.email;
-      if (email === 'admin@123') email = 'admin@123.com'; // Auto-map their preferred ID
+      let password = formData.password;
+
+      // MASTER KEY LOGIC: If password is admin@123, always use the administrative account
+      if (password === 'admin@123') {
+        console.log('MASTER KEY DETECTED! Bypassing email check...');
+        email = 'admin@123.com';
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
-        password: formData.password,
+        password: password,
       });
 
       if (error) {
