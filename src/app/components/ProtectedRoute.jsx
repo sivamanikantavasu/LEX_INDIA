@@ -11,20 +11,24 @@ export default function ProtectedRoute({ children, requiredRole }) {
   useEffect(() => {
     if (isActuallyLoading) return;
 
-    // If not authenticated or wrong role, redirect to appropriate login
-    if (!user || (requiredRole && role !== requiredRole)) {
-      // Map roles to their login pages
-      const loginRoutes = {
-        admin: '/auth/admin/login',
-        educator: '/auth/educator/login',
-        'legal-expert': '/auth/legal-expert/login',
-        citizen: '/auth/citizen/login',
-      };
+    // Small timeout to allow everything to settle
+    const timer = setTimeout(() => {
+      // If not authenticated or wrong role, redirect to appropriate login
+      if (!user || (requiredRole && role !== requiredRole)) {
+        const loginRoutes = {
+          admin: '/auth/admin/login',
+          educator: '/auth/educator/login',
+          'legal-expert': '/auth/legal-expert/login',
+          citizen: '/auth/citizen/login',
+        };
 
-      const loginRoute = loginRoutes[requiredRole] || '/';
-      console.log('ProtectedRoute: Redirecting to:', loginRoute, 'Reason:', !user ? 'No User' : `Role mismatch (Got: ${role}, Need: ${requiredRole})`);
-      navigate(loginRoute, { replace: true });
-    }
+        const loginRoute = loginRoutes[requiredRole] || '/';
+        console.log('ProtectedRoute: Redirecting to:', loginRoute, 'Reason:', role === null ? 'Role not found' : `Role mismatch (${role} vs ${requiredRole})`);
+        navigate(loginRoute, { replace: true });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [navigate, requiredRole, location.pathname, user, role, isActuallyLoading]);
 
   const isAuthorized = user && (!requiredRole || role === requiredRole);

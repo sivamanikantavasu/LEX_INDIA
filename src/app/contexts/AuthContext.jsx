@@ -51,8 +51,8 @@ export const AuthProvider = ({ children }) => {
   async function fetchUserRole(userId, email, retries = 3) {
     setRoleLoading(true);
     try {
-      // Hardcoded fallback for master admin
-      if (email === 'admin@123@lexindia.com' || email === 'admin@123.com' || email === 'admin@123') {
+      // 1. Hardcoded fallback for master admin
+      if (email === 'admin@123.com' || email === 'admin@123') {
         console.log('Detected Admin email, applying bypass...');
         setRole('admin');
         setRoleLoading(false);
@@ -65,27 +65,48 @@ export const AuthProvider = ({ children }) => {
         .from('profiles')
         .select('role')
         .eq('id', userId)
-        .maybeSingle(); // Better than .single() as it doesn't throw on missing
+        .maybeSingle(); 
       
       if (error) throw error;
 
       if (data) {
-        console.log('Role found:', data.role);
+        console.log('Role found from DB:', data.role);
         setRole(data.role);
         setRoleLoading(false);
         setLoading(false);
-      } else if (retries > 0) {
+        return;
+      } 
+      
+      if (retries > 0) {
         console.log(`Profile not found, retrying in 1s... (${retries} left)`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return fetchUserRole(userId, email, retries - 1);
-      } else {
-        console.warn('Profile not found after retries. Defaulting to citizen.');
-        setRole('citizen'); // Safe default
-        setRoleLoading(false);
-        setLoading(false);
+      } 
+
+      // 2. FAIL-SAFE: Create missing profile if not exists
+      console.warn('Profile MISSING after retries. Attempting self-healing...');
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const metadata = currentUser?.user_metadata || {};
+      const fallbackRole = metadata.role || 'citizen';
+      
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: metadata.username || (email ? email.split('@')[0] : 'user' + userId.slice(0,5)),
+          full_name: metadata.full_name || 'User',
+          role: fallbackRole
+        });
+      
+      if (insertError && !insertError.message.includes('duplicate key')) {
+        throw insertError;
       }
+
+      setRole(fallbackRole);
+      setRoleLoading(false);
+      setLoading(false);
     } catch (error) {
-      console.error('Error fetching user role:', error);
+      console.error('Error in fetchUserRole (fail-safe enabled):', error);
       if (retries > 0) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return fetchUserRole(userId, email, retries - 1);

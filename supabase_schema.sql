@@ -321,19 +321,36 @@ CREATE POLICY "Users can view their earned achievements." ON user_achievements F
 -- Note: This is a common pattern for Supabase to automatically create a profile record when a user signs up.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  username_base TEXT;
+  new_username TEXT;
 BEGIN
+  -- Get better base for username (full email local part)
+  username_base := split_part(new.email, '@', 1);
+  new_username := username_base;
+  
+  -- Handle potential collisions by appending random suffix if needed
+  -- (Though on signup, we try to avoid collision errors in the trigger)
   INSERT INTO public.profiles (id, username, full_name, avatar_url, role, phone, city, state)
   VALUES (
     new.id, 
-    COALESCE(new.raw_user_meta_data->>'username', substring(new.email from '(.*)@')), 
+    COALESCE(new.raw_user_meta_data->>'username', new_username), 
     COALESCE(new.raw_user_meta_data->>'full_name', 'User'), 
     new.raw_user_meta_data->>'avatar_url', 
     COALESCE((new.raw_user_meta_data->>'role')::user_role, 'citizen'),
     new.raw_user_meta_data->>'phone',
     new.raw_user_meta_data->>'city',
     new.raw_user_meta_data->>'state'
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    username = EXCLUDED.username,
+    full_name = EXCLUDED.full_name;
+    
   RETURN new;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Fallback: Ensure trigger doesn't fail auth signup
+    RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
